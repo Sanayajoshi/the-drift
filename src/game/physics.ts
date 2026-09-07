@@ -45,6 +45,7 @@ export interface PhysicsStepResult {
   damageInflicted: number;
   screenShake: number;
   hostileKilled?: HostileShip;
+  hostileShipDestroyed?: HostileShip;
   boundaryBreached?: boolean;
   derelictSalvaged?: DerelictStation;
   artifactCompleted?: ArtifactOrbitalState;
@@ -625,6 +626,29 @@ export function updatePhysics(
               soundManager.playLoreTransmission();
               result.artifactCompleted = node.artifact;
 
+              // If all relics have now been collected, awaken Chimera-0!
+              if (stats.artifactsCollected >= stats.totalArtifacts && stats.totalArtifacts > 0) {
+                const boss = hostileShips.find(e => e.isBoss);
+                if (boss && boss.dormantUntilRelicsCollected) {
+                  boss.dormantUntilRelicsCollected = false;
+                  boss.state = 'COMBAT';
+                  boss.warpInTimer = 2.5;
+                  // Position near the extraction gate to seal the escape route!
+                  boss.position.x = extractionGate.position.x + 360;
+                  boss.position.y = extractionGate.position.y + 240;
+                  boss.spawnOrigin = { ...boss.position };
+                  boss.velocity = { x: 0, y: 0 };
+                  boss.shootCooldown = 4.0;
+                  boss.phaseTransitionTimer = 0;
+                  soundManager.playBossAlert();
+                  result.bossStageChange = {
+                    stage: 1,
+                    name: '⚠️ ALL RELICS SECURED: APEX CHIMERA-0 WARPING IN AT EXTRACTION GATE!',
+                  };
+                  result.screenShake = 22;
+                }
+              }
+
               // Supernova transcendence spark nova
               for (let p = 0; p < 50; p++) {
                 const pa = Math.random() * Math.PI * 2;
@@ -1022,6 +1046,11 @@ export function updatePhysics(
 
   // 9. Hostile Ships AI & Combat Loop (With 60-second respawn timer)
   for (const enemy of hostileShips) {
+    // If boss is waiting for all relics, remain completely dormant
+    if (enemy.dormantUntilRelicsCollected) {
+      continue;
+    }
+
     // A. Dead & Respawning state
     if (enemy.state === 'DEAD') {
       enemy.respawnTimer = Math.max(0, enemy.respawnTimer - dt);
@@ -1057,7 +1086,13 @@ export function updatePhysics(
       continue;
     }
 
-    // B. Shield recharge & warp animation
+    // B. Shield recharge, warp animation & boss phase windup grace period
+    if (enemy.phaseTransitionTimer && enemy.phaseTransitionTimer > 0) {
+      enemy.phaseTransitionTimer = Math.max(0, enemy.phaseTransitionTimer - dt);
+      enemy.velocity.x *= 0.85;
+      enemy.velocity.y *= 0.85;
+      enemy.shootCooldown = Math.max(enemy.shootCooldown, enemy.phaseTransitionTimer);
+    }
     if (enemy.shieldImpactPulse && enemy.shieldImpactPulse > 0) {
       enemy.shieldImpactPulse = Math.max(0, enemy.shieldImpactPulse - dt * 3.5);
     }
@@ -1251,12 +1286,12 @@ export function updatePhysics(
                   y: enemy.position.y + Math.sin(bAngle) * (enemy.radius + 12),
                 },
                 velocity: {
-                  x: Math.cos(bAngle) * 2100,
-                  y: Math.sin(bAngle) * 2100,
+                  x: Math.cos(bAngle) * 1900,
+                  y: Math.sin(bAngle) * 1900,
                 },
                 rotation: bAngle,
                 type: 'TACHYON_BEAM',
-                damage: 32,
+                damage: 16,
                 splashRadius: 0,
                 homing: false,
                 targetId: null,
@@ -1282,7 +1317,7 @@ export function updatePhysics(
               },
               rotation: eFacing,
               type: 'VORTEX_CANNON',
-              damage: 48,
+              damage: 36,
               splashRadius: 150,
               homing: false,
               targetId: null,
@@ -1297,7 +1332,7 @@ export function updatePhysics(
           }
 
           // Boss secondary attack burst
-          if (enemy.isBoss && enemy.bossStage && enemy.bossStage >= 2) {
+          if (enemy.isBoss && enemy.bossStage && enemy.bossStage >= 2 && (!enemy.phaseTransitionTimer || enemy.phaseTransitionTimer <= 0)) {
             // Secondary Seeker Swarm
             soundManager.playMissileLaunch();
             [-1, 1].forEach(side => {
@@ -1306,11 +1341,11 @@ export function updatePhysics(
               projectiles.push({
                 id: `proj-e-boss-msl-${Date.now()}-${side}`,
                 position: { x: wingX, y: wingY },
-                velocity: { x: Math.cos(eFacing) * 400, y: Math.sin(eFacing) * 400 },
+                velocity: { x: Math.cos(eFacing) * 360, y: Math.sin(eFacing) * 360 },
                 rotation: eFacing,
                 type: 'HEAT_SEEKER',
-                damage: 26,
-                splashRadius: 25,
+                damage: 14,
+                splashRadius: 20,
                 homing: true,
                 targetId: 'player',
                 isPlayer: false,
@@ -1416,14 +1451,14 @@ export function updatePhysics(
     if (proj.homing) {
       let targetPos: { x: number; y: number } | null = null;
       if (proj.isPlayer) {
-        const targetEnemy = hostileShips.find(e => e.id === proj.targetId && e.state !== 'DEAD');
+        const targetEnemy = hostileShips.find(e => e.id === proj.targetId && e.state !== 'DEAD' && !e.dormantUntilRelicsCollected);
         if (targetEnemy) {
           targetPos = targetEnemy.position;
         } else {
-          // Re-acquire nearest alive enemy
+          // Re-acquire nearest alive active enemy
           let minDist = 1200;
           for (const e of hostileShips) {
-            if (e.state === 'DEAD') continue;
+            if (e.state === 'DEAD' || e.dormantUntilRelicsCollected) continue;
             const d = Math.hypot(e.position.x - proj.position.x, e.position.y - proj.position.y);
             if (d < minDist) {
               minDist = d;
@@ -1506,7 +1541,7 @@ export function updatePhysics(
       let projectileConsumed = false;
 
       for (const enemy of hostileShips) {
-        if (enemy.state === 'DEAD') continue;
+        if (enemy.state === 'DEAD' || enemy.dormantUntilRelicsCollected) continue;
         if (proj.piercedTargets && proj.piercedTargets.includes(enemy.id)) continue;
 
         // Check Barrier Drone Interception for Boss
@@ -1570,7 +1605,7 @@ export function updatePhysics(
                 const falloff = 1 - blastDist / proj.splashRadius;
                 const splashDmg = Math.round(proj.damage * Math.max(0.4, falloff));
 
-                applyDamageToEnemy(otherEnemy, splashDmg, stats, particles, result);
+                applyDamageToEnemy(otherEnemy, splashDmg, stats, particles, result, ship, projectiles);
               }
             }
 
@@ -1608,7 +1643,7 @@ export function updatePhysics(
                 otherEnemy.velocity.y -= ((otherEnemy.position.y - proj.position.y) / (vDist || 1)) * pullFactor;
 
                 const splashDmg = Math.round(proj.damage * Math.max(0.5, 1 - vDist / proj.splashRadius));
-                applyDamageToEnemy(otherEnemy, splashDmg, stats, particles, result);
+                applyDamageToEnemy(otherEnemy, splashDmg, stats, particles, result, ship, projectiles);
               }
             }
 
@@ -1633,7 +1668,7 @@ export function updatePhysics(
             break;
           } else if (proj.type === 'TACHYON_BEAM') {
             // Tachyon Arc-Lance pierces with high damage
-            applyDamageToEnemy(enemy, proj.damage, stats, particles, result);
+            applyDamageToEnemy(enemy, proj.damage, stats, particles, result, ship, projectiles);
             if (!proj.piercedTargets) proj.piercedTargets = [];
             proj.piercedTargets.push(enemy.id);
             result.screenShake = 6;
@@ -1654,7 +1689,7 @@ export function updatePhysics(
             }
           } else {
             // Direct Hit
-            applyDamageToEnemy(enemy, proj.damage, stats, particles, result);
+            applyDamageToEnemy(enemy, proj.damage, stats, particles, result, ship, projectiles);
 
             if (proj.type === 'SNIPER') {
               if (!proj.piercedTargets) proj.piercedTargets = [];
@@ -1876,7 +1911,9 @@ function applyDamageToEnemy(
   damage: number,
   stats: ExpeditionStats,
   particles: Particle[],
-  result: PhysicsStepResult
+  result: PhysicsStepResult,
+  ship?: Ship,
+  projectiles?: Projectile[]
 ) {
   enemy.shieldImpactPulse = 1.0;
   enemy.shieldRechargeDelay = 3.5;
@@ -1909,24 +1946,53 @@ function applyDamageToEnemy(
       enemy.color = '#f97316'; // Antimatter Orange
       enemy.secondaryColor = '#c2410c';
       enemy.weaponType = 'TACHYON_BEAM';
-      enemy.maxShootCooldown = 1.1;
-      result.bossStageChange = { stage: 2, name: 'PHASE II: TACHYON CORE EXPOSED' };
+      enemy.maxShootCooldown = 1.8;
+      // Critical Grace Period: 4.5 seconds to fall back and reposition!
+      enemy.phaseTransitionTimer = 4.5;
+      enemy.shootCooldown = 4.5;
+      result.bossStageChange = { stage: 2, name: '⚠️ PHASE II: TACHYON CORE EXPOSED — FALL BACK! (4.5s RECHARGE)' };
       soundManager.playBossPhaseAdvance();
       soundManager.playBossAlert();
-      result.screenShake = 18;
+      result.screenShake = 22;
+
+      // Defensive Repulsion Blast: pushes player safely backwards away from boss
+      if (ship) {
+        const pushDx = ship.position.x - enemy.position.x;
+        const pushDy = ship.position.y - enemy.position.y;
+        const pushDist = Math.hypot(pushDx, pushDy) || 1;
+        const repulsePower = 380;
+        ship.velocity.x += (pushDx / pushDist) * repulsePower;
+        ship.velocity.y += (pushDy / pushDist) * repulsePower;
+
+        // Temporary shield fortification so player survives retreat
+        ship.shield = Math.min(ship.maxShield, ship.shield + 40);
+      }
+
+      // Vaporize any immediate hostile projectiles within 650px radius
+      if (projectiles) {
+        for (let pIdx = projectiles.length - 1; pIdx >= 0; pIdx--) {
+          const pr = projectiles[pIdx];
+          if (!pr.isPlayer) {
+            const pDist = Math.hypot(pr.position.x - enemy.position.x, pr.position.y - enemy.position.y);
+            if (pDist < 650) {
+              projectiles.splice(pIdx, 1);
+            }
+          }
+        }
+      }
 
       // EMP Shockwave burst pushing surrounding entities
-      for (let p = 0; p < 45; p++) {
-        const pa = (p / 45) * Math.PI * 2;
+      for (let p = 0; p < 55; p++) {
+        const pa = (p / 55) * Math.PI * 2;
         particles.push({
           x: enemy.position.x,
           y: enemy.position.y,
-          vx: Math.cos(pa) * 240,
-          vy: Math.sin(pa) * 240,
+          vx: Math.cos(pa) * 280,
+          vy: Math.sin(pa) * 280,
           color: '#f97316',
-          size: 4,
+          size: 4.5,
           life: 0,
-          maxLife: 0.65,
+          maxLife: 0.75,
           alpha: 1.0,
           shape: 'spark',
         });
@@ -1937,23 +2003,49 @@ function applyDamageToEnemy(
       enemy.secondaryColor = '#991b1b';
       enemy.weaponType = 'VORTEX_CANNON';
       enemy.singularityActive = true;
-      enemy.maxShootCooldown = 0.95;
-      result.bossStageChange = { stage: 3, name: 'PHASE III: SINGULARITY COLLAPSE' };
+      enemy.maxShootCooldown = 1.6;
+      // Grace Period: 4.5 seconds to evade singularity collapse
+      enemy.phaseTransitionTimer = 4.5;
+      enemy.shootCooldown = 4.5;
+      result.bossStageChange = { stage: 3, name: '⚠️ PHASE III: SINGULARITY COLLAPSE — RETREAT TO SAFE DISTANCE! (4.5s)' };
       soundManager.playBossPhaseAdvance();
       soundManager.playSingularityVortex();
-      result.screenShake = 24;
+      result.screenShake = 26;
 
-      for (let p = 0; p < 60; p++) {
-        const pa = (p / 60) * Math.PI * 2;
+      // Repulsion burst
+      if (ship) {
+        const pushDx = ship.position.x - enemy.position.x;
+        const pushDy = ship.position.y - enemy.position.y;
+        const pushDist = Math.hypot(pushDx, pushDy) || 1;
+        const repulsePower = 400;
+        ship.velocity.x += (pushDx / pushDist) * repulsePower;
+        ship.velocity.y += (pushDy / pushDist) * repulsePower;
+        ship.shield = Math.min(ship.maxShield, ship.shield + 40);
+      }
+
+      if (projectiles) {
+        for (let pIdx = projectiles.length - 1; pIdx >= 0; pIdx--) {
+          const pr = projectiles[pIdx];
+          if (!pr.isPlayer) {
+            const pDist = Math.hypot(pr.position.x - enemy.position.x, pr.position.y - enemy.position.y);
+            if (pDist < 650) {
+              projectiles.splice(pIdx, 1);
+            }
+          }
+        }
+      }
+
+      for (let p = 0; p < 70; p++) {
+        const pa = (p / 70) * Math.PI * 2;
         particles.push({
           x: enemy.position.x,
           y: enemy.position.y,
-          vx: Math.cos(pa) * 320,
-          vy: Math.sin(pa) * 320,
+          vx: Math.cos(pa) * 340,
+          vy: Math.sin(pa) * 340,
           color: p % 2 === 0 ? '#ef4444' : '#a855f7',
           size: 5,
           life: 0,
-          maxLife: 0.8,
+          maxLife: 0.85,
           alpha: 1.0,
         });
       }
@@ -1985,6 +2077,7 @@ function applyDamageToEnemy(
     stats.finalScore += enemy.scoreValue;
     stats.flowMultiplier = Math.min(4.0, stats.flowMultiplier + (enemy.isBoss ? 1.5 : 0.6));
     result.hostileKilled = enemy;
+    result.hostileShipDestroyed = enemy;
 
     if (enemy.isBoss) {
       result.bossDefeated = true;

@@ -274,6 +274,7 @@ export function generateSector(seed: number): MapData {
         completedOrbits: 0,
         isCollected: false,
         resonancePercent: 0,
+        weaponUnlock: preset.upgradeReward?.type === 'WEAPON' ? preset.upgradeReward.weaponType : undefined,
         upgradeReward: preset.upgradeReward,
       };
     }
@@ -636,12 +637,13 @@ export function generateSector(seed: number): MapData {
     shieldRechargeDelay: 0,
     radius: 48,
     state: 'PATROL',
+    dormantUntilRelicsCollected: true,
     respawnTimer: 0,
     respawnMaxTime: 999999, // Boss does not respawn once downed
     warpInTimer: 0,
     weaponType: 'PULSE_LASER',
-    shootCooldown: 0.8,
-    maxShootCooldown: 0.8,
+    shootCooldown: 4.0,
+    maxShootCooldown: 1.2,
     detectionRadius: 1350,
     attackRange: 1100,
     color: '#38bdf8',
@@ -651,6 +653,7 @@ export function generateSector(seed: number): MapData {
     isBoss: true,
     bossStage: 1,
     maxBossStages: 3,
+    phaseTransitionTimer: 0,
     bossName: 'APEX DREADNOUGHT: CHIMERA-0',
     barrierDrones: [
       { angle: 0, distance: 82, alive: true, hp: 120, maxHp: 120 },
@@ -663,7 +666,6 @@ export function generateSector(seed: number): MapData {
     singularityActive: false,
     singularityStrength: 0,
     rammingSpeed: false,
-    phaseTransitionTimer: 0,
   });
 
   // Generate Precursor Derelict Megastructures (Orbital ruins with salvage and lore)

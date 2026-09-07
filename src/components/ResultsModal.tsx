@@ -19,17 +19,23 @@ export const ResultsModal: React.FC<ResultsModalProps> = ({
   onMainMenu,
   onHomeBase,
 }) => {
-  // Listen for Space / Enter to quickly restart
+  // Listen for Space / Enter to quickly restart, Esc/M for Menu, H for Home Base
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         onRestart();
+      } else if (e.code === 'Escape' || e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        onMainMenu();
+      } else if ((e.code === 'KeyH' || e.key.toLowerCase() === 'h') && onHomeBase) {
+        e.preventDefault();
+        onHomeBase();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onRestart]);
+  }, [onRestart, onMainMenu, onHomeBase]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);

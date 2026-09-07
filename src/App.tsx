@@ -46,6 +46,7 @@ export default function App() {
 
   const [tutorialStep, setTutorialStep] = useState<number>(0);
   const [fps, setFps] = useState<number>(60);
+  const fpsRef = useRef<number>(60);
   const [currentDt, setCurrentDt] = useState<number>(0.016);
   const [userZoom, setUserZoom] = useState<number>(1.0);
   const userZoomRef = useRef<number>(1.0);
@@ -135,6 +136,8 @@ export default function App() {
         HEAT_SEEKER: 0,
         AREA_MISSILE: 0,
         SNIPER: 0,
+        TACHYON_BEAM: 0,
+        VORTEX_CANNON: 0,
       },
       isFiring: false,
       isThrusting: false,
@@ -210,17 +213,129 @@ export default function App() {
     });
   }, []);
 
+  // Initialize initial sector for background cosmos visual rendering immediately on load
+  useEffect(() => {
+    if (!mapDataRef.current) {
+      const map = generateSector(currentSeed);
+      mapDataRef.current = map;
+
+      const prof = profileRef.current;
+      const maxHull = 100 + (prof?.upgrades?.hullLevel || 0) * 25;
+      const maxShield = 100 + (prof?.upgrades?.shieldCapLevel || 0) * 20;
+
+      const ship: Ship = {
+        position: { x: map.playerStart.x, y: map.playerStart.y },
+        velocity: { x: 0, y: 0 },
+        rotation: Math.PI / 4,
+        angularVelocity: 0,
+        energy: 100,
+        maxEnergy: 100,
+        hull: maxHull,
+        maxHull: maxHull,
+        shield: maxShield,
+        maxShield: maxShield,
+        shieldRechargeDelay: 0,
+        shieldImpactPulse: 0,
+        selectedWeapon: prof?.equippedWeapon || 'PULSE_LASER',
+        weaponCooldowns: {
+          PULSE_LASER: 0,
+          HEAT_SEEKER: 0,
+          AREA_MISSILE: 0,
+          SNIPER: 0,
+          TACHYON_BEAM: 0,
+          VORTEX_CANNON: 0,
+        },
+        isFiring: false,
+        isThrusting: false,
+        isBraking: false,
+        isRotatingLeft: false,
+        isRotatingRight: false,
+        isSolarCharging: false,
+        radius: 14,
+        trail: [],
+        inVoidPocket: false,
+        nearGravityNodeId: null,
+        scanningSignalId: null,
+        scanProgress: 0,
+      };
+
+      const artifactCount = map.massNodes.filter(n => !!n.artifact).length;
+      const stats: ExpeditionStats = {
+        seed: currentSeed,
+        timeElapsed: 0,
+        energySpent: 0,
+        energyCollected: 0,
+        standardShardsCollected: 0,
+        richShardsCollected: 0,
+        gravityAssists: 0,
+        signalScanned: false,
+        artifactsCollected: 0,
+        totalArtifacts: artifactCount,
+        hostilesDestroyed: 0,
+        shotsFired: 0,
+        damageDealt: 0,
+        shieldDamageAbsorbed: 0,
+        damageTaken: 0,
+        distanceTraveled: 0,
+        maxSpeed: 0,
+        flowMultiplier: 1.0,
+        maxFlowMultiplier: 1.0,
+        finalScore: 0,
+        rating: '—',
+        efficiencyPercent: 0,
+      };
+
+      shipRef.current = ship;
+      statsRef.current = stats;
+      particlesRef.current = [];
+      cameraRef.current = {
+        x: ship.position.x,
+        y: ship.position.y,
+        targetX: ship.position.x,
+        targetY: ship.position.y,
+        zoom: 0.88,
+        shake: 0,
+      };
+    }
+  }, [currentSeed]);
+
+  // Keep references fresh for listeners without causing effect churn
+  const gameStateRef = useRef<GameState>(gameState);
+  gameStateRef.current = gameState;
+  const initGameRef = useRef(initGame);
+  initGameRef.current = initGame;
+
+  // Window Focus State (critical for iframes/embedded preview)
+  const [isWindowFocused, setIsWindowFocused] = useState<boolean>(() => {
+    return typeof document !== 'undefined' ? document.hasFocus() : true;
+  });
+
+  const handleFocusWindow = useCallback(() => {
+    try {
+      window.focus();
+      canvasRef.current?.focus();
+    } catch {
+      // safe
+    }
+    setIsWindowFocused(true);
+  }, []);
+
   // Keyboard & Window Focus Listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent default scrolling for arrows, space, tab, and zoom keys
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) {
+      if (
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code) ||
+        ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key?.toLowerCase() || '')
+      ) {
         e.preventDefault();
       }
 
-      keysDownRef.current.add(e.code);
+      if (e.code) keysDownRef.current.add(e.code);
       if (e.key) {
+        keysDownRef.current.add(e.key);
         keysDownRef.current.add(e.key.toLowerCase());
+        keysDownRef.current.add(e.key.toUpperCase());
       }
 
       // Weapon Switching Hotkeys [1, 2, 3, 4, 5, 6]
@@ -256,10 +371,10 @@ export default function App() {
           if (s.miniMapMode === 'EXPANDED') {
             return { ...s, miniMapMode: 'SECTOR' };
           }
-          if (gameState === 'PLAYING') {
+          if (gameStateRef.current === 'PLAYING') {
             setGameState('PAUSED');
             soundManager.stopAll();
-          } else if (gameState === 'PAUSED') {
+          } else if (gameStateRef.current === 'PAUSED') {
             setGameState('PLAYING');
           }
           return s;
@@ -313,7 +428,7 @@ export default function App() {
       if (e.code === 'F5') {
         e.preventDefault();
         const nextSeed = Math.floor(Math.random() * 899999 + 100000);
-        initGame(nextSeed);
+        initGameRef.current(nextSeed);
       }
       if (e.code === 'F6') {
         e.preventDefault();
@@ -329,13 +444,20 @@ export default function App() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysDownRef.current.delete(e.code);
+      if (e.code) keysDownRef.current.delete(e.code);
       if (e.key) {
+        keysDownRef.current.delete(e.key);
         keysDownRef.current.delete(e.key.toLowerCase());
+        keysDownRef.current.delete(e.key.toUpperCase());
       }
     };
 
+    const handleFocus = () => {
+      setIsWindowFocused(true);
+    };
+
     const handleBlur = () => {
+      setIsWindowFocused(false);
       keysDownRef.current.clear();
       isMouseDownRef.current = false;
       touchInputsRef.current.isThrusting = false;
@@ -345,16 +467,27 @@ export default function App() {
       touchInputsRef.current.isFiringWeapon = false;
     };
 
+    const handlePointerDown = () => {
+      handleFocusWindow();
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('pointerdown', handlePointerDown);
+
+    // Initial focus call
+    handleFocusWindow();
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [gameState, initGame]);
+  }, [handleFocusWindow]);
 
   // Canvas Mouse Wheel, Touch Pinch & Mouse Click to Fire
   useEffect(() => {
@@ -460,6 +593,7 @@ export default function App() {
       // FPS measurement
       frameCount++;
       if (timestamp - fpsTimer >= 1000) {
+        fpsRef.current = frameCount;
         setFps(frameCount);
         frameCount = 0;
         fpsTimer = timestamp;
@@ -472,15 +606,32 @@ export default function App() {
 
       if (map && ship && stats) {
         if (gameState === 'PLAYING') {
-          // Poll inputs
+          // Poll inputs (WASD, Arrows, AZERTY ZQSD, Space, Enter)
           const keys = keysDownRef.current;
           const touch = touchInputsRef.current;
 
-          ship.isThrusting = keys.has('KeyW') || keys.has('ArrowUp') || keys.has('w') || touch.isThrusting;
-          ship.isBraking = keys.has('KeyS') || keys.has('ArrowDown') || keys.has('s') || touch.isBraking;
-          ship.isRotatingLeft = keys.has('KeyA') || keys.has('ArrowLeft') || keys.has('a') || touch.isRotatingLeft;
-          ship.isRotatingRight = keys.has('KeyD') || keys.has('ArrowRight') || keys.has('d') || touch.isRotatingRight;
-          ship.isFiring = keys.has('Space') || isMouseDownRef.current || touch.isFiringWeapon;
+          ship.isThrusting = Boolean(
+            keys.has('KeyW') || keys.has('ArrowUp') || keys.has('w') || keys.has('W') ||
+            keys.has('KeyZ') || keys.has('z') || keys.has('Z') || // AZERTY Z
+            keys.has('Up') || touch.isThrusting
+          );
+          ship.isBraking = Boolean(
+            keys.has('KeyS') || keys.has('ArrowDown') || keys.has('s') || keys.has('S') ||
+            keys.has('Down') || touch.isBraking
+          );
+          ship.isRotatingLeft = Boolean(
+            keys.has('KeyA') || keys.has('ArrowLeft') || keys.has('a') || keys.has('A') ||
+            keys.has('KeyQ') || keys.has('q') || keys.has('Q') || // AZERTY Q
+            keys.has('Left') || touch.isRotatingLeft
+          );
+          ship.isRotatingRight = Boolean(
+            keys.has('KeyD') || keys.has('ArrowRight') || keys.has('d') || keys.has('D') ||
+            keys.has('Right') || touch.isRotatingRight
+          );
+          ship.isFiring = Boolean(
+            keys.has('Space') || keys.has(' ') || keys.has('Enter') ||
+            isMouseDownRef.current || touch.isFiringWeapon
+          );
 
           // Sound triggers for continuous actions
           if (ship.isThrusting && ship.energy > 0) {
@@ -646,6 +797,10 @@ export default function App() {
             });
             lastHudUpdateRef.current = timestamp;
           }
+        } else {
+          // Ambient cosmic camera drift for menu / prologue background
+          camera.x += Math.cos(timestamp * 0.0003) * 0.35;
+          camera.y += Math.sin(timestamp * 0.0002) * 0.35;
         }
 
         // Render Frame
@@ -668,11 +823,14 @@ export default function App() {
             camera,
             settings,
             map.worldSize,
-            fps,
+            fpsRef.current,
             map.derelicts,
             map.asteroids
           );
         }
+      } else if (ctx) {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
       animationFrameIdRef.current = requestAnimationFrame(loop);
@@ -683,7 +841,7 @@ export default function App() {
       if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [gameState, tutorialStep, settings, fps, bestScore, bestTime]);
+  }, [gameState, tutorialStep, settings, userZoom]);
 
   const handleToggleSound = () => {
     const nextVal = !settings.soundEnabled;
@@ -778,12 +936,19 @@ export default function App() {
     : 0;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#020617] select-none font-sans">
+    <div
+      id="drift-app-container"
+      tabIndex={-1}
+      onClick={handleFocusWindow}
+      className="relative w-screen h-screen overflow-hidden bg-[#020617] select-none font-sans outline-none"
+    >
       {/* 2D Canvas Viewport */}
       <canvas
         id="game-canvas"
         ref={canvasRef}
-        className="block w-full h-full cursor-crosshair"
+        tabIndex={0}
+        onClick={handleFocusWindow}
+        className="block w-full h-full cursor-crosshair outline-none"
       />
 
       {/* Prologue Lore Cinematic */}
@@ -860,6 +1025,8 @@ export default function App() {
           miniMapMode={settings.miniMapMode}
           onToggleMiniMapMode={handleToggleMiniMapMode}
           onToggleExpandMap={handleToggleExpandMap}
+          isWindowFocused={isWindowFocused}
+          onFocusWindow={handleFocusWindow}
         />
       )}
 

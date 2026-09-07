@@ -21,6 +21,8 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Orbit,
+  Keyboard,
 } from 'lucide-react';
 
 interface HUDProps {
@@ -50,6 +52,8 @@ interface HUDProps {
   miniMapMode: 'SECTOR' | 'LOCAL' | 'EXPANDED';
   onToggleMiniMapMode?: () => void;
   onToggleExpandMap?: () => void;
+  isWindowFocused?: boolean;
+  onFocusWindow?: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -76,6 +80,8 @@ export const HUD: React.FC<HUDProps> = ({
   miniMapMode,
   onToggleMiniMapMode,
   onToggleExpandMap,
+  isWindowFocused = true,
+  onFocusWindow,
 }) => {
   const [showControlsHint, setShowControlsHint] = useState<boolean>(true);
   const [cleanRecordingMode, setCleanRecordingMode] = useState<boolean>(false);
@@ -232,34 +238,47 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
 
         {/* Top Center: Flight Avionics, Velocity & Gate Distance */}
-        {!cleanRecordingMode && (
-          <div
-            id="hud-nav-center"
-            className="hidden sm:flex flex-col items-center bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 py-1.5 shadow-xl"
-          >
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 tracking-wider">
-              <Compass className="w-3.5 h-3.5 text-sky-400" />
-              <span>
-                PORTAL: <strong className="text-slate-100 font-mono text-xs ml-1">{distKm} KM</strong>
-              </span>
-            </div>
+        <div className="flex flex-col items-center gap-1.5">
+          {!isWindowFocused && (
+            <button
+              onClick={onFocusWindow}
+              className="pointer-events-auto cursor-pointer animate-pulse bg-sky-500/30 hover:bg-sky-500/40 border border-sky-400 rounded-full px-4 py-1 backdrop-blur-md shadow-[0_0_20px_rgba(56,189,248,0.4)] flex items-center gap-2 text-xs font-mono text-sky-200 transition active:scale-95"
+              title="Click to focus keyboard controls"
+            >
+              <Keyboard className="w-4 h-4 text-sky-400 animate-bounce" />
+              <span>CLICK SCREEN TO ACTIVATE KEYBOARD</span>
+            </button>
+          )}
 
-            <div className="flex items-center gap-3 mt-0.5 text-xs font-mono">
-              <div className="text-slate-400">
-                SPD: <span className="text-sky-300 font-bold">{Math.round(speed)}</span>
+          {!cleanRecordingMode && (
+            <div
+              id="hud-nav-center"
+              className="hidden sm:flex flex-col items-center bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 py-1.5 shadow-xl"
+            >
+              <div className="flex items-center gap-2 text-xs font-mono text-slate-400 tracking-wider">
+                <Compass className="w-3.5 h-3.5 text-sky-400" />
+                <span>
+                  PORTAL: <strong className="text-slate-100 font-mono text-xs ml-1">{distKm} KM</strong>
+                </span>
               </div>
 
-              {speed > 10 && (
-                <div className="flex items-center gap-1 border-l border-slate-800 pl-3">
-                  <span className="text-slate-400">DRIFT:</span>
-                  <span className={`font-bold ${driftDeg > 35 ? 'text-amber-400' : 'text-sky-300'}`}>
-                    {driftDeg}°
-                  </span>
+              <div className="flex items-center gap-3 mt-0.5 text-xs font-mono">
+                <div className="text-slate-400">
+                  SPD: <span className="text-sky-300 font-bold">{Math.round(speed)}</span>
                 </div>
-              )}
+
+                {speed > 10 && (
+                  <div className="flex items-center gap-1 border-l border-slate-800 pl-3">
+                    <span className="text-slate-400">DRIFT:</span>
+                    <span className={`font-bold ${driftDeg > 35 ? 'text-amber-400' : 'text-sky-300'}`}>
+                      {driftDeg}°
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Top Right: Score, Hostiles, Zoom & Quick Controls */}
         <div id="hud-stats-right" className="flex items-start gap-2">
@@ -435,13 +454,15 @@ export const HUD: React.FC<HUDProps> = ({
           {showControlsHint ? (
             <div className="bg-slate-950/85 backdrop-blur-md border border-slate-800/80 rounded-xl px-3 py-1.5 shadow-xl flex items-center gap-3 text-[11px] font-mono text-slate-300">
               <div className="flex items-center gap-2">
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 text-sky-300 rounded border border-slate-700 font-bold">WASD</kbd> Fly</span>
+                <span><kbd className="px-1.5 py-0.5 bg-slate-800 text-sky-300 rounded border border-slate-700 font-bold">WASD / ↑↓←→</kbd> Fly</span>
                 <span className="text-slate-600">·</span>
                 <span><kbd className="px-1.5 py-0.5 bg-slate-800 text-red-300 rounded border border-slate-700 font-bold">Space / Click</kbd> Fire</span>
                 <span className="text-slate-600">·</span>
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-700">1-4</kbd> Weapons</span>
+                <span><kbd className="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-700">1-6</kbd> Weapons</span>
                 <span className="text-slate-600">·</span>
                 <span><kbd className="px-1 py-0.5 bg-slate-800 text-slate-300 rounded">M</kbd> Map</span>
+                <span className="text-slate-600">·</span>
+                <span><kbd className="px-1 py-0.5 bg-slate-800 text-slate-300 rounded">Esc</kbd> Pause</span>
               </div>
               <button
                 onClick={() => setShowControlsHint(false)}

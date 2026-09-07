@@ -35,13 +35,17 @@ const LORE_SLIDES = [
 
 export const PrologueIntro: React.FC<PrologueIntroProps> = ({ onComplete }) => {
   const [slideIndex, setSlideIndex] = useState(0);
-  const [displayText, setDisplayText] = useState('');
-  const [isTyping, setIsTyping] = useState(true);
+  const [displayText, setDisplayText] = useState(() => LORE_SLIDES[0].body);
+  const [isTyping, setIsTyping] = useState(false);
 
   const currentSlide = LORE_SLIDES[slideIndex];
 
   useEffect(() => {
-    soundManager.playLoreTransmission();
+    try {
+      soundManager.playLoreTransmission();
+    } catch {
+      // safe
+    }
     setDisplayText('');
     setIsTyping(true);
 
@@ -62,20 +66,54 @@ export const PrologueIntro: React.FC<PrologueIntroProps> = ({ onComplete }) => {
   }, [slideIndex, currentSlide.body]);
 
   const handleNext = () => {
-    soundManager.playClick();
+    try {
+      soundManager.playClick();
+    } catch {
+      // safe
+    }
     if (slideIndex < LORE_SLIDES.length - 1) {
       setSlideIndex(prev => prev + 1);
     } else {
-      soundManager.playWarpJump();
+      try {
+        soundManager.playWarpJump();
+      } catch {
+        // safe
+      }
       onComplete();
     }
   };
 
   const handleSkip = () => {
-    soundManager.playClick();
-    soundManager.playWarpJump();
+    try {
+      soundManager.playClick();
+      soundManager.playWarpJump();
+    } catch {
+      // safe
+    }
     onComplete();
   };
+
+  // Keyboard navigation for prologue
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        ['Space', 'Enter', 'ArrowRight', 'ArrowDown', 'KeyD', 'KeyW'].includes(e.code) ||
+        [' ', 'enter', 'arrowright', 'd', 'w'].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        handleNext();
+      } else if (
+        ['Escape', 'Backspace', 'KeyS'].includes(e.code) ||
+        ['escape', 'backspace', 's'].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        handleSkip();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [slideIndex]);
 
   const IconComp = currentSlide.icon;
 
@@ -152,10 +190,11 @@ export const PrologueIntro: React.FC<PrologueIntroProps> = ({ onComplete }) => {
           <button
             id="btn-prologue-skip"
             onClick={handleSkip}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono text-slate-400 hover:text-slate-200 transition cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-slate-400 hover:text-slate-200 transition cursor-pointer"
           >
             <SkipForward className="w-4 h-4" />
             <span>SKIP PROLOGUE</span>
+            <kbd className="hidden sm:inline px-1 py-0.5 text-[10px] bg-slate-800/90 text-slate-400 border border-slate-700 rounded">ESC</kbd>
           </button>
 
           <button
@@ -164,6 +203,7 @@ export const PrologueIntro: React.FC<PrologueIntroProps> = ({ onComplete }) => {
             className="flex items-center gap-2 px-6 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-mono font-bold text-xs sm:text-sm tracking-wider rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 transition active:scale-95 cursor-pointer"
           >
             <span>{slideIndex === LORE_SLIDES.length - 1 ? 'ENTER HAVEN CITADEL' : 'CONTINUE'}</span>
+            <kbd className="px-1.5 py-0.5 text-[10px] bg-slate-950/20 text-slate-950 border border-slate-950/30 rounded font-mono">SPACE ↵</kbd>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

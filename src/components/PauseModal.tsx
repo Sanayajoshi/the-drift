@@ -31,6 +31,23 @@ export const PauseModal: React.FC<PauseModalProps> = ({
   onResetZoom,
   userZoom,
 }) => {
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        onResume();
+      } else if (e.code === 'KeyR' || e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        onRestart();
+      } else if (e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        onMainMenu();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onResume, onRestart, onMainMenu]);
+
   return (
     <div
       id="pause-modal-container"

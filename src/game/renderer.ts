@@ -1063,6 +1063,11 @@ function renderExtractionGate(ctx: CanvasRenderingContext2D, gate: ExtractionGat
 
 function renderHostileShips(ctx: CanvasRenderingContext2D, hostileShips: HostileShip[], playerShip: Ship) {
   for (const enemy of hostileShips) {
+    // If boss is waiting for all relics, remain completely hidden
+    if (enemy.dormantUntilRelicsCollected) {
+      continue;
+    }
+
     // 1. If Dead: Render Respawn Beacon & 60s Countdown Marker
     if (enemy.state === 'DEAD') {
       ctx.save();
@@ -1360,6 +1365,26 @@ function renderHostileShips(ctx: CanvasRenderingContext2D, hostileShips: Hostile
       ctx.fillText(`AGGRO`, enemy.position.x, barY - 4);
     }
     ctx.restore();
+
+    // 4. Boss Phase Transition Overload Charging Aura & Countdown
+    if (enemy.isBoss && enemy.phaseTransitionTimer && enemy.phaseTransitionTimer > 0) {
+      ctx.save();
+      const chargeRatio = enemy.phaseTransitionTimer / 4.5;
+      const chargeRadius = enemy.radius * 1.8 + (1 - chargeRatio) * 70;
+      ctx.strokeStyle = enemy.bossStage === 2 ? '#f97316' : '#ef4444';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(enemy.position.x, enemy.position.y, chargeRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Flashing warning text
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 11px "Space Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`⚠️ CORE OVERDRIVE: ${enemy.phaseTransitionTimer.toFixed(1)}s (FALL BACK!)`, enemy.position.x, enemy.position.y + enemy.radius + 24);
+      ctx.restore();
+    }
   }
 }
 
@@ -2566,6 +2591,7 @@ function renderMiniMap(
   // 8. Draw Hostile Ships on Radar
   if (hostileShips) {
     for (const enemy of hostileShips) {
+      if (enemy.dormantUntilRelicsCollected) continue;
       if (enemy.state === 'DEAD') {
         const dp = worldToMap(enemy.spawnOrigin.x, enemy.spawnOrigin.y);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';

@@ -42,6 +42,37 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     setSeedInput(newSeed.toString());
   };
 
+  // Keyboard navigation for main menu
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyL' || e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        handleStart();
+      } else if (e.code === 'KeyH' || e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        if (onEnterHomeBase) onEnterHomeBase();
+      } else if (e.code === 'KeyP' || e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (onStartPrologue) onStartPrologue();
+      } else if (e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        onToggleSound();
+      } else if (e.code === 'KeyR' || e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        handleRandomSeed();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [seedInput, onEnterHomeBase, onStartPrologue, onToggleSound]);
+
   return (
     <div id="main-menu-container" className="absolute inset-0 z-20 flex items-center justify-center bg-[#04060a]/90 backdrop-blur-xl p-4 sm:p-8">
       {/* Background Decorative Cosmic Grid */}
@@ -67,10 +98,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <button
               id="btn-enter-home-base"
               onClick={onEnterHomeBase}
-              className="w-full py-4 px-6 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-slate-950 font-mono font-bold text-base tracking-wider rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 transition-all duration-150 transform active:scale-[0.99] flex items-center justify-center gap-3 cursor-pointer"
+              className="w-full py-3.5 px-6 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-slate-950 font-mono font-bold text-sm sm:text-base tracking-wider rounded-xl shadow-lg shadow-sky-500/20 hover:shadow-sky-500/35 transition-all duration-150 transform active:scale-[0.99] flex items-center justify-center gap-3 cursor-pointer"
             >
               <Orbit className="w-5 h-5" />
-              [ ENTER HOME SYSTEM & UPGRADES ]
+              <span>[ ENTER HOME SYSTEM & UPGRADES ]</span>
+              <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] bg-slate-950/20 text-slate-950 border border-slate-950/30 rounded font-mono">H</kbd>
             </button>
           )}
 
@@ -82,17 +114,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 className="py-3 px-3 bg-purple-950/50 hover:bg-purple-900/60 border border-purple-700/50 text-purple-300 font-mono font-semibold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 <BookOpen className="w-4 h-4" />
-                <span>PROLOGUE LORE</span>
+                <span>PROLOGUE</span>
+                <kbd className="hidden sm:inline px-1 py-0.5 text-[9px] bg-purple-900/60 text-purple-300 border border-purple-700/60 rounded">P</kbd>
               </button>
             )}
 
             <button
               id="btn-begin-expedition"
               onClick={() => handleStart()}
-              className="py-3 px-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-sky-400 font-mono font-semibold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+              className="py-3 px-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-mono font-bold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-sky-500/20"
             >
               <Play className="w-4 h-4 fill-current" />
               <span>LAUNCH SECTOR</span>
+              <kbd className="hidden sm:inline px-1 py-0.5 text-[9px] bg-slate-950/20 text-slate-950 border border-slate-950/30 rounded">SPACE ↵</kbd>
             </button>
           </div>
         </div>

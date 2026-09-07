@@ -51,13 +51,27 @@ class SoundManager {
   }
 
   private ensureContext(): boolean {
-    if (!this.ctx) {
-      this.init();
+    if (!this.enabled) return false;
+    try {
+      if (!this.ctx) {
+        this.init();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return !!this.ctx && this.ctx.state !== 'closed';
+    } catch {
+      return false;
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+  }
+
+  private safeAudio(fn: (ctx: AudioContext, t: number) => void) {
+    try {
+      if (!this.ensureContext() || !this.ctx) return;
+      fn(this.ctx, this.ctx.currentTime);
+    } catch {
+      // Audio safely suppressed if not allowed
     }
-    return !!this.ctx && this.enabled;
   }
 
   private setupContinuousNodes() {
@@ -710,55 +724,85 @@ class SoundManager {
     osc.stop(t + 0.95);
   }
 
-  public playUpgradePurchased() {
-    if (!this.ensureContext() || !this.ctx) return;
-    const t = this.ctx.currentTime;
+  public playClick() {
+    this.safeAudio((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    [440, 554.37, 659.25, 880].forEach((freq, i) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, t);
+      osc.frequency.exponentialRampToValueAtTime(700, t + 0.04);
 
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-
-      gain.gain.setValueAtTime(0.08, t + i * 0.06);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.25);
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
 
       osc.connect(gain);
-      gain.connect(this.ctx!.destination);
+      gain.connect(ctx.destination);
 
-      osc.start(t + i * 0.06);
-      osc.stop(t + i * 0.06 + 0.25);
+      osc.start(t);
+      osc.stop(t + 0.04);
+    });
+  }
+
+  public playUpgrade() {
+    this.playUpgradePurchased();
+  }
+
+  public playWeaponUnlocked() {
+    this.playUpgradePurchased();
+  }
+
+  public playUpgradePurchased() {
+    this.safeAudio((ctx, t) => {
+      [440, 554.37, 659.25, 880].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+
+        gain.gain.setValueAtTime(0.08, t + i * 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.06 + 0.25);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(t + i * 0.06);
+        osc.stop(t + i * 0.06 + 0.25);
+      });
     });
   }
 
   public playLoreTransmission() {
-    if (!this.ensureContext() || !this.ctx) return;
-    const t = this.ctx.currentTime;
+    this.safeAudio((ctx, t) => {
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
 
-    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
 
-      osc.type = 'sine';
-      osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.06, t + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.35);
 
-      gain.gain.setValueAtTime(0.06, t + i * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-      osc.connect(gain);
-      gain.connect(this.ctx!.destination);
-
-      osc.start(t + i * 0.08);
-      osc.stop(t + i * 0.08 + 0.35);
+        osc.start(t + i * 0.08);
+        osc.stop(t + i * 0.08 + 0.35);
+      });
     });
   }
 
   public stopAll() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    if (this.engineGain) this.engineGain.gain.setTargetAtTime(0, t, 0.05);
-    if (this.gravityGain) this.gravityGain.gain.setTargetAtTime(0, t, 0.05);
+    try {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      if (this.engineGain) this.engineGain.gain.setTargetAtTime(0, t, 0.05);
+      if (this.gravityGain) this.gravityGain.gain.setTargetAtTime(0, t, 0.05);
+    } catch {
+      // ignore
+    }
   }
 }
 

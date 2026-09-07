@@ -92,6 +92,7 @@ export interface HostileShip {
   singularityStrength?: number;
   rammingSpeed?: boolean;
   phaseTransitionTimer?: number;
+  dormantUntilRelicsCollected?: boolean;
 }
 
 export interface Ship {
@@ -142,6 +143,7 @@ export interface ArtifactOrbitalState {
   unlockedAt?: number;
   dissolveProgress?: number; // 0 to 1 for transcendence / absorption into ship
   isDissolved?: boolean; // true once absorbed, leaving orbital path clear
+  weaponUnlock?: WeaponType;
   upgradeReward?: {
     type: 'WEAPON' | 'PERK' | 'STAT';
     key: string;
@@ -448,7 +450,7 @@ const STORAGE_KEY_PROFILE = 'THE_DRIFT_PLAYER_PROFILE_V2';
 
 export function getDefaultPlayerProfile(): PlayerProfile {
   return {
-    shards: 150, // Starting shard reserves for first upgrade trial
+    shards: 350, // Starting shard reserves for immediate station upgrades
     relicsFound: [],
     relicsLoreUnlocked: [],
     upgrades: {

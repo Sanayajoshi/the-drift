@@ -64,6 +64,25 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [selectedSectorSeed, setSelectedSectorSeed] = useState<number>(() => Math.floor(Math.random() * 899999 + 100000));
   const [isWarping, setIsWarping] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => (prev === msg ? null : prev));
+    }, 3200);
+  };
+
+  const handleClaimResearchGrant = () => {
+    const next: PlayerProfile = {
+      ...profile,
+      shards: profile.shards + 250,
+    };
+    soundManager.playUpgrade();
+    savePlayerProfile(next);
+    onUpdateProfile(next);
+    showToast('💎 CITADEL RESEARCH GRANT: +250 SHARDS DEPOSITED!');
+  };
 
   const handleOpenModal = (modal: ActiveModal) => {
     soundManager.playClick();
@@ -74,6 +93,51 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playClick();
     setActiveModal('NONE');
   };
+
+  // Keyboard navigation for Home Base
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (activeModal !== 'NONE') {
+          handleCloseModal();
+        } else {
+          onReturnToMenu();
+        }
+      } else if (e.code === 'Space' || e.code === 'Enter') {
+        if (activeModal === 'WARP_CONFIRM') {
+          e.preventDefault();
+          handleInitiateJump();
+        } else if (activeModal === 'NONE') {
+          e.preventDefault();
+          handleOpenModal('WARP_CONFIRM');
+        }
+      } else if (e.code === 'Digit1' || e.key === '1') {
+        e.preventDefault();
+        handleOpenModal('SHIPYARD');
+      } else if (e.code === 'Digit2' || e.key === '2') {
+        e.preventDefault();
+        handleOpenModal('FOUNDRY');
+      } else if (e.code === 'Digit3' || e.key === '3') {
+        e.preventDefault();
+        handleOpenModal('TECH_LAB');
+      } else if (e.code === 'Digit4' || e.key === '4') {
+        e.preventDefault();
+        handleOpenModal('ARCHIVE');
+      } else if (e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        onToggleSound();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeModal, selectedSectorSeed, onReturnToMenu, onToggleSound]);
 
   // Buy Upgrades
   const handleUpgradeHull = () => {
@@ -93,6 +157,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playUpgrade();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`🛡️ HULL REINFORCED TO LEVEL ${lvl + 1}! (+25 MAX HP)`);
   };
 
   const handleUpgradeShield = () => {
@@ -113,6 +178,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playUpgrade();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`🛡️ DEFLECTOR SHIELD UPGRADED TO LEVEL ${lvl + 1}! (+20 SHIELD CAPACITY)`);
   };
 
   const handleUpgradeThrusters = () => {
@@ -132,6 +198,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playUpgrade();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`⚡ ION THRUSTERS UPGRADED TO LEVEL ${lvl + 1}! (+15% ACCELERATION)`);
   };
 
   const handleUpgradeSolar = () => {
@@ -151,6 +218,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playUpgrade();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`⚡ SOLAR ABSORBERS UPGRADED TO LEVEL ${lvl + 1}! (+35% RECHARGE RATE)`);
   };
 
   const handleUpgradeOverclock = () => {
@@ -170,6 +238,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playUpgrade();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`🎯 WEAPON OVERCLOCK UPGRADED TO LEVEL ${lvl + 1}! (+20% DAMAGE)`);
   };
 
   // Unlock / Equip Weapon
@@ -187,6 +256,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playWeaponUnlocked();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`🚀 WEAPON UNLOCKED: ${WEAPON_DEFINITIONS[type].name.toUpperCase()} EQUIPPED!`);
   };
 
   const handleEquipWeapon = (type: WeaponType) => {
@@ -198,6 +268,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
     soundManager.playClick();
     savePlayerProfile(next);
     onUpdateProfile(next);
+    showToast(`🎯 EQUIPPED: ${WEAPON_DEFINITIONS[type].name.toUpperCase()}`);
   };
 
   // Initiate Warp Jump
@@ -245,22 +316,32 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
         </div>
 
         {/* Resources & Status Badges */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2 bg-sky-950/40 border border-sky-500/30 rounded-xl px-3.5 py-1.5 shadow-[0_0_15px_rgba(56,189,248,0.1)]">
             <Sparkles className="w-4 h-4 text-sky-400 animate-pulse" />
-            <span className="text-xs text-slate-400">SHARD RESERVES:</span>
+            <span className="text-xs text-slate-400 hidden sm:inline">SHARDS:</span>
             <span className="text-sm font-bold text-sky-300">{profile.shards.toLocaleString()}</span>
           </div>
 
+          <button
+            id="btn-claim-grant-header"
+            onClick={handleClaimResearchGrant}
+            className="flex items-center gap-1.5 text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 rounded-xl px-3 py-1.5 transition cursor-pointer shadow-md hover:shadow-amber-500/20 active:scale-95"
+            title="Claim Citadel Research Grant (+250 Shards) to afford instant upgrades"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <span>+250 GRANT</span>
+          </button>
+
           <div className="hidden sm:flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-1.5">
             <Radio className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-xs text-slate-400">RELICS FOUND:</span>
+            <span className="text-xs text-slate-400">RELICS:</span>
             <span className="text-xs font-bold text-purple-300">{profile.relicsFound.length} / 3</span>
           </div>
 
           {profile.bossDefeated && (
             <div className="hidden md:flex items-center gap-1.5 bg-red-950/40 border border-red-500/40 rounded-xl px-2.5 py-1 text-[11px] font-bold text-red-400">
-              <span>CHIMERA-0 DESTROYED</span>
+              <span>CHIMERA-0 DEFEATED</span>
             </div>
           )}
 
@@ -274,8 +355,61 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
         </div>
       </header>
 
+      {/* Top Station Dock Quick Access Bar */}
+      <nav aria-label="Station Facilities" className="relative z-20 w-full bg-slate-950/90 border-b border-slate-800 px-4 py-2 flex items-center justify-center gap-2 sm:gap-3 flex-wrap backdrop-blur-md">
+        <span className="text-[11px] font-bold text-slate-400 mr-1 hidden lg:inline">UPGRADE MODULES:</span>
+        <button
+          id="dock-btn-shipyard"
+          onClick={() => handleOpenModal('SHIPYARD')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900/80 border border-sky-500/40 text-sky-200 hover:text-white text-xs font-bold transition cursor-pointer shadow-sm hover:scale-105"
+        >
+          <Shield className="w-3.5 h-3.5 text-sky-400" />
+          <span>[1] SHIPYARD (Hull/Shield)</span>
+        </button>
+        <button
+          id="dock-btn-foundry"
+          onClick={() => handleOpenModal('FOUNDRY')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-bold transition cursor-pointer shadow-sm hover:scale-105"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-400" />
+          <span>[2] FOUNDRY (Thrusters/Solar)</span>
+        </button>
+        <button
+          id="dock-btn-techlab"
+          onClick={() => handleOpenModal('TECH_LAB')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-200 hover:text-white text-xs font-bold transition cursor-pointer shadow-sm hover:scale-105"
+        >
+          <Crosshair className="w-3.5 h-3.5 text-emerald-400" />
+          <span>[3] TECH LAB (Weapons)</span>
+        </button>
+        <button
+          id="dock-btn-archive"
+          onClick={() => handleOpenModal('ARCHIVE')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-200 hover:text-white text-xs font-bold transition cursor-pointer shadow-sm hover:scale-105"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+          <span>[4] CODEX (Relics)</span>
+        </button>
+        <button
+          id="dock-btn-warp"
+          onClick={() => handleOpenModal('WARP_CONFIRM')}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-extrabold transition cursor-pointer shadow-md shadow-sky-500/20 hover:scale-105 ml-1"
+        >
+          <Orbit className="w-3.5 h-3.5" />
+          <span>WARP JUMP [Space]</span>
+        </button>
+      </nav>
+
+      {/* Real-time Action Feedback Toast */}
+      {toastMessage && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-slate-900/95 border border-sky-400/80 rounded-xl text-sky-200 text-xs font-bold shadow-2xl shadow-sky-500/25 flex items-center gap-2.5 animate-bounce">
+          <Sparkles className="w-4 h-4 text-sky-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Main Orbital Space Viewport with Floating Station Modules */}
-      <main className="relative z-10 w-full h-[calc(100%-72px)] flex flex-col items-center justify-center p-4 sm:p-8">
+      <main className="relative z-10 w-full h-[calc(100%-116px)] flex flex-col items-center justify-center p-4 sm:p-6">
         {/* Central Haven Prime Planet Silhouette (Background) */}
         <div className="absolute w-[440px] h-[440px] sm:w-[580px] sm:h-[580px] rounded-full bg-gradient-to-b from-sky-950/40 via-slate-950/80 to-transparent border border-sky-500/10 pointer-events-none flex items-center justify-center">
           {/* Orbital Atmospheric Rim */}
@@ -415,16 +549,20 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
           </div>
         </div>
 
-        {/* Quick Launch Bottom Bar */}
-        <div className="relative z-20 mt-4 flex items-center gap-4">
+        {/* Quick Launch Bottom Bar & Guide */}
+        <div className="relative z-20 mt-3 flex flex-col sm:flex-row items-center gap-3">
           <button
             id="btn-stargate-warp"
             onClick={() => handleOpenModal('WARP_CONFIRM')}
-            className="py-3 px-8 bg-gradient-to-r from-sky-500 via-sky-400 to-sky-500 hover:from-sky-400 hover:to-sky-300 text-slate-950 font-mono font-extrabold text-xs sm:text-sm tracking-widest rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all duration-150 transform active:scale-95 flex items-center gap-2 cursor-pointer"
+            className="py-2.5 px-6 bg-gradient-to-r from-sky-500 via-sky-400 to-sky-500 hover:from-sky-400 hover:to-sky-300 text-slate-950 font-mono font-extrabold text-xs sm:text-sm tracking-widest rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all duration-150 transform active:scale-95 flex items-center gap-2 cursor-pointer"
           >
             <Orbit className="w-4 h-4" />
-            <span>[ ENGAGE STARGATE JUMP ]</span>
+            <span>[ ENGAGE STARGATE JUMP — SPACE ]</span>
           </button>
+        </div>
+
+        <div className="relative z-20 mt-2 text-center max-w-xl text-[11px] text-slate-400 bg-slate-950/80 border border-slate-800/80 px-4 py-1.5 rounded-xl backdrop-blur-sm">
+          💡 <span className="text-slate-200 font-bold">UPGRADE GUIDE:</span> Press <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-sky-300">1</kbd> for Shipyard, <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-amber-300">2</kbd> for Foundry, <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-emerald-300">3</kbd> for Weapons, or <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-purple-300">4</kbd> for Codex. Spend Shards, or tap <span className="text-amber-300 font-bold">[+250 GRANT]</span> anytime!
         </div>
       </main>
 
@@ -433,16 +571,56 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
       {/* 1. Shipyard Modal */}
       {activeModal === 'SHIPYARD' && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-          <div className="relative w-full max-w-md bg-slate-900 border border-sky-500/40 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <Shield className="w-5 h-5 text-sky-400" />
-                <h3 className="text-base font-bold text-slate-100">AEGIS SHIPYARD</h3>
-              </div>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs">✕ CLOSE</button>
+          <div className="relative w-full max-w-lg bg-slate-900 border border-sky-500/40 rounded-2xl p-6 shadow-2xl">
+            {/* Facility Sub-Navigation Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-4 text-xs font-bold">
+              <button onClick={() => setActiveModal('SHIPYARD')} className="py-1.5 px-1 rounded-lg bg-sky-500 text-slate-950 flex items-center justify-center gap-1 shadow">
+                <Shield className="w-3 h-3" />
+                <span className="truncate">SHIPYARD</span>
+              </button>
+              <button onClick={() => setActiveModal('FOUNDRY')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Zap className="w-3 h-3" />
+                <span className="truncate">FOUNDRY</span>
+              </button>
+              <button onClick={() => setActiveModal('TECH_LAB')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Crosshair className="w-3 h-3" />
+                <span className="truncate">TECH LAB</span>
+              </button>
+              <button onClick={() => setActiveModal('ARCHIVE')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <BookOpen className="w-3 h-3" />
+                <span className="truncate">CODEX</span>
+              </button>
             </div>
 
-            <div className="my-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-5 h-5 text-sky-400" />
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">AEGIS SHIPYARD</h3>
+                  <p className="text-[11px] text-slate-400">Upgrade Hull Integrity and Deflector Shield Capacity</p>
+                </div>
+              </div>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs px-2 py-1 bg-slate-800 rounded">✕ CLOSE</button>
+            </div>
+
+            {/* Shard Balance & Grant Bar */}
+            <div className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 mt-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-sky-400 animate-pulse" />
+                <span className="text-xs text-slate-400">RESERVE SHARDS:</span>
+                <span className="text-sm font-bold text-sky-300">{profile.shards.toLocaleString()}</span>
+              </div>
+              <button
+                onClick={handleClaimResearchGrant}
+                className="px-2.5 py-1 text-xs font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition cursor-pointer flex items-center gap-1"
+                title="Add +250 Shards immediately"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>+250 GRANT</span>
+              </button>
+            </div>
+
+            <div className="my-4 space-y-4">
               {/* Hull Upgrade */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5">
                 <div className="flex items-center justify-between">
@@ -450,18 +628,18 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                   <span className="text-xs text-sky-400">LVL {profile.upgrades.hullLevel} / 5</span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Current: {100 + profile.upgrades.hullLevel * 25} HP → Next: {100 + (profile.upgrades.hullLevel + 1) * 25} HP
+                  Current: {100 + profile.upgrades.hullLevel * 25} HP → Next: {100 + (profile.upgrades.hullLevel + 1) * 25} HP (+25 HP)
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    COST: <strong className="text-sky-300">{profile.upgrades.hullLevel < 5 ? `${UPGRADE_COSTS.hull[profile.upgrades.hullLevel]} SHARDS` : 'MAXED'}</strong>
+                    COST: <strong className="text-sky-300">{profile.upgrades.hullLevel < 5 ? `${UPGRADE_COSTS.hull[profile.upgrades.hullLevel]} SHARDS` : 'MAX LEVEL'}</strong>
                   </span>
                   <button
                     disabled={profile.upgrades.hullLevel >= 5 || profile.shards < UPGRADE_COSTS.hull[profile.upgrades.hullLevel]}
                     onClick={handleUpgradeHull}
-                    className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
+                    className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
                   >
-                    UPGRADE
+                    {profile.upgrades.hullLevel >= 5 ? 'MAXED' : profile.shards < UPGRADE_COSTS.hull[profile.upgrades.hullLevel] ? `NEED ${UPGRADE_COSTS.hull[profile.upgrades.hullLevel]} SHARDS` : `UPGRADE (${UPGRADE_COSTS.hull[profile.upgrades.hullLevel]})`}
                   </button>
                 </div>
               </div>
@@ -473,18 +651,18 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                   <span className="text-xs text-sky-400">LVL {profile.upgrades.shieldCapLevel} / 5</span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Current: {100 + profile.upgrades.shieldCapLevel * 20} Capacity • Recharge delay reduced
+                  Current: {100 + profile.upgrades.shieldCapLevel * 20} Capacity • Faster delay & regen
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    COST: <strong className="text-sky-300">{profile.upgrades.shieldCapLevel < 5 ? `${UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel]} SHARDS` : 'MAXED'}</strong>
+                    COST: <strong className="text-sky-300">{profile.upgrades.shieldCapLevel < 5 ? `${UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel]} SHARDS` : 'MAX LEVEL'}</strong>
                   </span>
                   <button
                     disabled={profile.upgrades.shieldCapLevel >= 5 || profile.shards < UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel]}
                     onClick={handleUpgradeShield}
-                    className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
+                    className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
                   >
-                    UPGRADE
+                    {profile.upgrades.shieldCapLevel >= 5 ? 'MAXED' : profile.shards < UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel] ? `NEED ${UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel]} SHARDS` : `UPGRADE (${UPGRADE_COSTS.shield[profile.upgrades.shieldCapLevel]})`}
                   </button>
                 </div>
               </div>
@@ -496,16 +674,56 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
       {/* 2. Foundry Modal */}
       {activeModal === 'FOUNDRY' && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-          <div className="relative w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <Zap className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-slate-100">HYPER-DRIVE FOUNDRY</h3>
-              </div>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs">✕ CLOSE</button>
+          <div className="relative w-full max-w-lg bg-slate-900 border border-amber-500/40 rounded-2xl p-6 shadow-2xl">
+            {/* Facility Sub-Navigation Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-4 text-xs font-bold">
+              <button onClick={() => setActiveModal('SHIPYARD')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Shield className="w-3 h-3" />
+                <span className="truncate">SHIPYARD</span>
+              </button>
+              <button onClick={() => setActiveModal('FOUNDRY')} className="py-1.5 px-1 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center gap-1 shadow">
+                <Zap className="w-3 h-3" />
+                <span className="truncate">FOUNDRY</span>
+              </button>
+              <button onClick={() => setActiveModal('TECH_LAB')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Crosshair className="w-3 h-3" />
+                <span className="truncate">TECH LAB</span>
+              </button>
+              <button onClick={() => setActiveModal('ARCHIVE')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <BookOpen className="w-3 h-3" />
+                <span className="truncate">CODEX</span>
+              </button>
             </div>
 
-            <div className="my-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">HYPER-DRIVE FOUNDRY</h3>
+                  <p className="text-[11px] text-slate-400">Upgrade Thruster Acceleration and Solar Energy Harvesters</p>
+                </div>
+              </div>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs px-2 py-1 bg-slate-800 rounded">✕ CLOSE</button>
+            </div>
+
+            {/* Shard Balance & Grant Bar */}
+            <div className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 mt-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="text-xs text-slate-400">RESERVE SHARDS:</span>
+                <span className="text-sm font-bold text-amber-300">{profile.shards.toLocaleString()}</span>
+              </div>
+              <button
+                onClick={handleClaimResearchGrant}
+                className="px-2.5 py-1 text-xs font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition cursor-pointer flex items-center gap-1"
+                title="Add +250 Shards immediately"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>+250 GRANT</span>
+              </button>
+            </div>
+
+            <div className="my-4 space-y-4">
               {/* Thruster Upgrade */}
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5">
                 <div className="flex items-center justify-between">
@@ -517,14 +735,14 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    COST: <strong className="text-amber-300">{profile.upgrades.thrusterLevel < 5 ? `${UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel]} SHARDS` : 'MAXED'}</strong>
+                    COST: <strong className="text-amber-300">{profile.upgrades.thrusterLevel < 5 ? `${UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel]} SHARDS` : 'MAX LEVEL'}</strong>
                   </span>
                   <button
                     disabled={profile.upgrades.thrusterLevel >= 5 || profile.shards < UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel]}
                     onClick={handleUpgradeThrusters}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
                   >
-                    UPGRADE
+                    {profile.upgrades.thrusterLevel >= 5 ? 'MAXED' : profile.shards < UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel] ? `NEED ${UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel]} SHARDS` : `UPGRADE (${UPGRADE_COSTS.thruster[profile.upgrades.thrusterLevel]})`}
                   </button>
                 </div>
               </div>
@@ -540,14 +758,14 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    COST: <strong className="text-amber-300">{profile.upgrades.solarLevel < 5 ? `${UPGRADE_COSTS.solar[profile.upgrades.solarLevel]} SHARDS` : 'MAXED'}</strong>
+                    COST: <strong className="text-amber-300">{profile.upgrades.solarLevel < 5 ? `${UPGRADE_COSTS.solar[profile.upgrades.solarLevel]} SHARDS` : 'MAX LEVEL'}</strong>
                   </span>
                   <button
                     disabled={profile.upgrades.solarLevel >= 5 || profile.shards < UPGRADE_COSTS.solar[profile.upgrades.solarLevel]}
                     onClick={handleUpgradeSolar}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
                   >
-                    UPGRADE
+                    {profile.upgrades.solarLevel >= 5 ? 'MAXED' : profile.shards < UPGRADE_COSTS.solar[profile.upgrades.solarLevel] ? `NEED ${UPGRADE_COSTS.solar[profile.upgrades.solarLevel]} SHARDS` : `UPGRADE (${UPGRADE_COSTS.solar[profile.upgrades.solarLevel]})`}
                   </button>
                 </div>
               </div>
@@ -560,12 +778,52 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
       {activeModal === 'TECH_LAB' && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
           <div className="relative w-full max-w-2xl bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            {/* Facility Sub-Navigation Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-4 text-xs font-bold">
+              <button onClick={() => setActiveModal('SHIPYARD')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Shield className="w-3 h-3" />
+                <span className="truncate">SHIPYARD</span>
+              </button>
+              <button onClick={() => setActiveModal('FOUNDRY')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Zap className="w-3 h-3" />
+                <span className="truncate">FOUNDRY</span>
+              </button>
+              <button onClick={() => setActiveModal('TECH_LAB')} className="py-1.5 px-1 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center gap-1 shadow">
+                <Crosshair className="w-3 h-3" />
+                <span className="truncate">TECH LAB</span>
+              </button>
+              <button onClick={() => setActiveModal('ARCHIVE')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <BookOpen className="w-3 h-3" />
+                <span className="truncate">CODEX</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
                 <Crosshair className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-slate-100">PRECURSOR TECH LAB & ARMORY</h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">PRECURSOR TECH LAB & ARMORY</h3>
+                  <p className="text-[11px] text-slate-400">Synthesize, Overclock, and Equip Advanced Weapon Systems</p>
+                </div>
               </div>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs">✕ CLOSE</button>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs px-2 py-1 bg-slate-800 rounded">✕ CLOSE</button>
+            </div>
+
+            {/* Shard Balance & Grant Bar */}
+            <div className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 mt-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span className="text-xs text-slate-400">RESERVE SHARDS:</span>
+                <span className="text-sm font-bold text-emerald-300">{profile.shards.toLocaleString()}</span>
+              </div>
+              <button
+                onClick={handleClaimResearchGrant}
+                className="px-2.5 py-1 text-xs font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition cursor-pointer flex items-center gap-1"
+                title="Add +250 Shards immediately"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>+250 GRANT</span>
+              </button>
             </div>
 
             {/* Weapon Overclock Module */}
@@ -580,9 +838,9 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
               <button
                 disabled={profile.upgrades.weaponOverclockLevel >= 5 || profile.shards < UPGRADE_COSTS.overclock[profile.upgrades.weaponOverclockLevel]}
                 onClick={handleUpgradeOverclock}
-                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
+                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-lg transition"
               >
-                {profile.upgrades.weaponOverclockLevel < 5 ? `${UPGRADE_COSTS.overclock[profile.upgrades.weaponOverclockLevel]} SHARDS` : 'MAXED'}
+                {profile.upgrades.weaponOverclockLevel >= 5 ? 'MAXED' : profile.shards < UPGRADE_COSTS.overclock[profile.upgrades.weaponOverclockLevel] ? `NEED ${UPGRADE_COSTS.overclock[profile.upgrades.weaponOverclockLevel]} SHARDS` : `UPGRADE (${UPGRADE_COSTS.overclock[profile.upgrades.weaponOverclockLevel]})`}
               </button>
             </div>
 
@@ -598,12 +856,12 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                 return (
                   <div
                     key={type}
-                    className={`p-3 rounded-xl border transition ${
+                    className={`p-3.5 rounded-xl border transition ${
                       isEquipped
-                        ? 'bg-sky-950/30 border-sky-500'
+                        ? 'bg-sky-950/40 border-sky-400 shadow-md shadow-sky-500/10'
                         : isUnlocked
-                        ? 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                        : 'bg-slate-950/30 border-slate-900 opacity-70'
+                        ? 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                        : 'bg-slate-950/40 border-slate-900'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -612,7 +870,7 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                         <span className="text-xs font-bold text-slate-200">{def.name}</span>
                       </div>
                       {isEquipped && (
-                        <span className="text-[10px] font-bold text-sky-400 bg-sky-950 border border-sky-500/40 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-bold text-sky-300 bg-sky-950 border border-sky-500/40 px-2 py-0.5 rounded">
                           EQUIPPED
                         </span>
                       )}
@@ -622,21 +880,21 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
                       {def.description}
                     </p>
 
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
-                      <span>DMG: {def.damage} | NRG: {def.energyCost}</span>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+                      <span>DMG: <strong className="text-slate-200">{def.damage}</strong> | NRG: <strong className="text-slate-200">{def.energyCost}</strong></span>
                       {isUnlocked ? (
                         <button
                           onClick={() => handleEquipWeapon(type)}
                           disabled={isEquipped}
-                          className="px-2.5 py-1 text-xs font-bold rounded bg-slate-800 hover:bg-slate-700 text-sky-300 disabled:opacity-40 cursor-pointer"
+                          className="px-3 py-1 text-xs font-bold rounded bg-sky-500 hover:bg-sky-400 text-slate-950 disabled:bg-slate-800 disabled:text-sky-400/60 disabled:cursor-default transition cursor-pointer"
                         >
-                          {isEquipped ? 'ACTIVE' : 'EQUIP'}
+                          {isEquipped ? 'ACTIVE' : 'EQUIP WEAPON'}
                         </button>
                       ) : (
                         <button
                           onClick={() => handleUnlockWeapon(type)}
                           disabled={profile.shards < cost}
-                          className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 disabled:opacity-40 cursor-pointer flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-bold rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition"
                         >
                           <Lock className="w-3 h-3" />
                           <span>UNLOCK ({cost})</span>
@@ -655,12 +913,52 @@ export const HomeBase: React.FC<HomeBaseProps> = ({
       {activeModal === 'ARCHIVE' && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
           <div className="relative w-full max-w-2xl bg-slate-900 border border-purple-500/40 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            {/* Facility Sub-Navigation Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-4 text-xs font-bold">
+              <button onClick={() => setActiveModal('SHIPYARD')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Shield className="w-3 h-3" />
+                <span className="truncate">SHIPYARD</span>
+              </button>
+              <button onClick={() => setActiveModal('FOUNDRY')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Zap className="w-3 h-3" />
+                <span className="truncate">FOUNDRY</span>
+              </button>
+              <button onClick={() => setActiveModal('TECH_LAB')} className="py-1.5 px-1 rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                <Crosshair className="w-3 h-3" />
+                <span className="truncate">TECH LAB</span>
+              </button>
+              <button onClick={() => setActiveModal('ARCHIVE')} className="py-1.5 px-1 rounded-lg bg-purple-500 text-slate-950 flex items-center justify-center gap-1 shadow">
+                <BookOpen className="w-3 h-3" />
+                <span className="truncate">CODEX</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
                 <BookOpen className="w-5 h-5 text-purple-400" />
-                <h3 className="text-base font-bold text-slate-100">QUANTUM CODEX & PRECURSOR LORE</h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">QUANTUM CODEX & PRECURSOR LORE</h3>
+                  <p className="text-[11px] text-slate-400">Recovered Precursor Relics and Apex Threat Recon</p>
+                </div>
               </div>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs">✕ CLOSE</button>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-white text-xs px-2 py-1 bg-slate-800 rounded">✕ CLOSE</button>
+            </div>
+
+            {/* Shard Balance & Grant Bar */}
+            <div className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 mt-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
+                <span className="text-xs text-slate-400">RESERVE SHARDS:</span>
+                <span className="text-sm font-bold text-purple-300">{profile.shards.toLocaleString()}</span>
+              </div>
+              <button
+                onClick={handleClaimResearchGrant}
+                className="px-2.5 py-1 text-xs font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition cursor-pointer flex items-center gap-1"
+                title="Add +250 Shards immediately"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>+250 GRANT</span>
+              </button>
             </div>
 
             <div className="my-5 space-y-4">
