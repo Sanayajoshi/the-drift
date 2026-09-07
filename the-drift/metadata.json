@@ -1,0 +1,6 @@
+{
+  "name": "The Drift",
+  "description": "A minimalist 2D space exploration game where momentum, gravity, and trajectory planning are the core mechanics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
